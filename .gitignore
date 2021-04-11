@@ -13,3 +13,9 @@ docs-target/
 /test_lib/
 /testbuild/
 rocketchip.jar
+.idea/
+api-config-chipsalliance
+chisel3
+firrtl
+hardfloat
+torture

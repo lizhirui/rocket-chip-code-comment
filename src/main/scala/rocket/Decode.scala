@@ -5,10 +5,18 @@ package freechips.rocketchip.rocket
 import Chisel._
 import scala.collection.mutable.{ArrayBuffer, Map}
 
+/**
+  * A object for decoding instructions according the conversation table
+  */
 object DecodeLogic
 {
+  /**
+    * Convert BitPat to Term
+    * @param lit
+    * @return
+    */
   def term(lit: BitPat) =
-    new Term(lit.value, BigInt(2).pow(lit.getWidth)-(lit.mask+1))
+    new Term(lit.value, BigInt(2).pow(lit.getWidth)-(lit.mask+1))//it's equal to new Term(lit.value, ~lit.mask)
   def logic(addr: UInt, addrWidth: Int, cache: Map[Term,Bool], terms: Seq[Term]) = {
     terms.map { t =>
       cache.getOrElseUpdate(t, (if (t.mask == 0) addr else addr & Bits(BigInt(2).pow(addrWidth)-(t.mask+1), addrWidth)) === Bits(t.value, addrWidth))
@@ -56,11 +64,30 @@ object DecodeLogic
   private val caches = Map[UInt,Map[Term,Bool]]()
 }
 
+/**
+  * A number handle class providing covers/intersects/similar and merge operation
+  * @param value
+  * @param mask
+  */
 class Term(val value: BigInt, val mask: BigInt = 0)
 {
   var prime = true
 
+  /**
+    * return true condition:
+    * if a bit of this isn't don't care bit,the same bit of x isn't don't care bit.
+    * if a bit of x isn't don't care bit,the same bit of x may be don't care bit.
+    * the common care bits of this and x are all same.
+    * @param x
+    * @return
+    */
   def covers(x: Term) = ((value ^ x.value) &~ mask | x.mask &~ mask).signum == 0
+
+  /**
+    * if the common care bits of this and x are all same,then return true,otherwise return false
+    * @param x
+    * @return
+    */
   def intersects(x: Term) = ((value ^ x.value) &~ mask &~ x.mask).signum == 0
   override def equals(that: Any) = that match {
     case x: Term => x.value == value && x.mask == mask
@@ -68,10 +95,23 @@ class Term(val value: BigInt, val mask: BigInt = 0)
   }
   override def hashCode = value.toInt
   def < (that: Term) = value < that.value || value == that.value && mask < that.mask
+
+  /**
+    * the care bit set of this and x are same(mask is same) and value > x.value and the defference of x and this is only 1 bit
+    * @param x
+    * @return
+    */
   def similar(x: Term) = {
     val diff = value - x.value
-    mask == x.mask && value > x.value && (diff & diff-1) == 0
+    mask == x.mask && value > x.value && (diff & diff-1) == 0//(diff & diff-1) <=> diff is 2^n or 0
   }
+
+  /**
+    * if the difference parts are all 1 in this and 0 in x,the difference part bits of result will be cleared,and those bits will be added to don't care list(mask),
+    * otherwise,i think the result is meaningless
+    * @param x
+    * @return
+    */
   def merge(x: Term) = {
     prime = false
     x.prime = false

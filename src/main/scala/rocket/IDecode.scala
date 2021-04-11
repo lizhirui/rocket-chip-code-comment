@@ -11,41 +11,51 @@ import freechips.rocketchip.scie.SCIE
 import Instructions._
 import ALU._
 
+/**
+  * Instruction Decode Constants Abstract Trait
+  */
 abstract trait DecodeConstants extends HasCoreParameters
 {
   val table: Array[(BitPat, List[BitPat])]
 }
 
+/**
+  * Internal Control Signals
+  */
 class IntCtrlSigs extends Bundle {
-  val legal = Bool()
-  val fp = Bool()
-  val rocc = Bool()
-  val branch = Bool()
-  val jal = Bool()
-  val jalr = Bool()
+  val legal = Bool()//Whether instruction is legal
+  val fp = Bool()//Whether instruction is a float-precision instruction
+  val rocc = Bool()//Whether instruction is belong to rocket custom coprocessor instruction set
+  val branch = Bool()//Whether instruction is belong to conditional-branch instruction set
+  val jal = Bool()//Whether instruction is jal
+  val jalr = Bool()//Whether instruction is jalr
   val rxs2 = Bool()
   val rxs1 = Bool()
-  val scie = Bool()
-  val sel_alu2 = Bits(width = A2_X.getWidth)
-  val sel_alu1 = Bits(width = A1_X.getWidth)
-  val sel_imm = Bits(width = IMM_X.getWidth)
+  val scie = Bool()//Whether instruction is belong to simple custom instruction extension instruction set
+  val sel_alu2 = Bits(width = A2_X.getWidth)//ALU Argument 2 Data Source
+  val sel_alu1 = Bits(width = A1_X.getWidth)//ALU Argument 1 Data Source
+  val sel_imm = Bits(width = IMM_X.getWidth)//Immediate Value Field Type
   val alu_dw = Bool()
   val alu_fn = Bits(width = FN_X.getWidth)
-  val mem = Bool()
-  val mem_cmd = Bits(width = M_SZ)
+  val mem = Bool()//Whether instruction is a memory-operation instruction
+  val mem_cmd = Bits(width = M_SZ)//Memory Command
   val rfs1 = Bool()
   val rfs2 = Bool()
   val rfs3 = Bool()
-  val wfd = Bool()
-  val mul = Bool()
-  val div = Bool()
+  val wfd = Bool()//Whether instruction is wfd
+  val mul = Bool()//Whether instruction is mul
+  val div = Bool()//Whether instruction is div
   val wxd = Bool()
-  val csr = Bits(width = CSR.SZ)
-  val fence_i = Bool()
-  val fence = Bool()
-  val amo = Bool()
+  val csr = Bits(width = CSR.SZ)//CSR Address
+  val fence_i = Bool()//Whether instruction is fence.i
+  val fence = Bool()//Whether instruction is fence
+  val amo = Bool()//Whether instruction is an atomic instruction
   val dp = Bool()
 
+  /**
+    * Default Internal Control Signal List
+    * @return
+    */
   def default: List[BitPat] =
                 //           jal                                                             renf1               fence.i
                 //   val     | jalr                                                          | renf2             |
@@ -57,16 +67,26 @@ class IntCtrlSigs extends Bundle {
                 //   | | | | | | | | scie      |       |      |      |         | |           | | | | | | |       | | | dp
                 List(N,X,X,X,X,X,X,X,X,A2_X,   A1_X,   IMM_X, DW_X,  FN_X,     N,M_X,        X,X,X,X,X,X,X,CSR.X,X,X,X,X)
 
+  /**
+    * Decode a instruction
+    * @param inst the instruction waiting for decoding
+    * @param table instruction decoding table(insturction -> internal control signal list)
+    * @return
+    */
   def decode(inst: UInt, table: Iterable[(BitPat, List[BitPat])]) = {
-    val decoder = DecodeLogic(inst, default, table)
+    val decoder = DecodeLogic(inst, default, table)//Execute Decode Logic and get a list result
     val sigs = Seq(legal, fp, rocc, branch, jal, jalr, rxs2, rxs1, scie, sel_alu2,
                    sel_alu1, sel_imm, alu_dw, alu_fn, mem, mem_cmd,
                    rfs1, rfs2, rfs3, wfd, mul, div, wxd, csr, fence_i, fence, amo, dp)
-    sigs zip decoder map {case(s,d) => s := d}
+    sigs zip decoder map {case(s,d) => s := d}//Write to member variables of this class
     this
   }
 }
 
+/**
+  * Instruction Decode Class including a table which contains RV32I/Zicsr/Machine Trap-Return/Interrupt-Management Instructions
+  * @param p
+  */
 class IDecode(implicit val p: Parameters) extends DecodeConstants
 {
   val table: Array[(BitPat, List[BitPat])] = Array(
@@ -110,8 +130,8 @@ class IDecode(implicit val p: Parameters) extends DecodeConstants
 
     FENCE->     List(Y,N,N,N,N,N,N,N,N,A2_X,   A1_X,   IMM_X, DW_X,  FN_X,     N,M_X,        N,N,N,N,N,N,N,CSR.N,N,Y,N,N),
 
-    SCALL->     List(Y,N,N,N,N,N,N,X,N,A2_X,   A1_X,   IMM_X, DW_X,  FN_X,     N,M_X,        N,N,N,N,N,N,N,CSR.I,N,N,N,N),
-    SBREAK->    List(Y,N,N,N,N,N,N,X,N,A2_X,   A1_X,   IMM_X, DW_X,  FN_X,     N,M_X,        N,N,N,N,N,N,N,CSR.I,N,N,N,N),
+    SCALL->     List(Y,N,N,N,N,N,N,X,N,A2_X,   A1_X,   IMM_X, DW_X,  FN_X,     N,M_X,        N,N,N,N,N,N,N,CSR.I,N,N,N,N),//maybe it's ECALL in manual
+    SBREAK->    List(Y,N,N,N,N,N,N,X,N,A2_X,   A1_X,   IMM_X, DW_X,  FN_X,     N,M_X,        N,N,N,N,N,N,N,CSR.I,N,N,N,N),//maybe it's EBREAK in manual
     MRET->      List(Y,N,N,N,N,N,N,X,N,A2_X,   A1_X,   IMM_X, DW_X,  FN_X,     N,M_X,        N,N,N,N,N,N,N,CSR.I,N,N,N,N),
     WFI->       List(Y,N,N,N,N,N,N,X,N,A2_X,   A1_X,   IMM_X, DW_X,  FN_X,     N,M_X,        N,N,N,N,N,N,N,CSR.I,N,N,N,N),
     CEASE->     List(Y,N,N,N,N,N,N,X,N,A2_X,   A1_X,   IMM_X, DW_X,  FN_X,     N,M_X,        N,N,N,N,N,N,N,CSR.I,N,N,N,N),
@@ -123,6 +143,11 @@ class IDecode(implicit val p: Parameters) extends DecodeConstants
     CSRRCI->    List(Y,N,N,N,N,N,N,N,N,A2_IMM, A1_ZERO,IMM_Z, DW_XPR,FN_ADD,   N,M_X,        N,N,N,N,N,N,Y,CSR.C,N,N,N,N))
 }
 
+/**
+  * Instruction Decode Class including a table which contains RV32 Zifencei Instructions
+  * @param flushDCache
+  * @param p
+  */
 class FenceIDecode(flushDCache: Boolean)(implicit val p: Parameters) extends DecodeConstants
 {
   private val (v, cmd) = if (flushDCache) (Y, BitPat(M_FLUSH_ALL)) else (N, M_X)
@@ -131,6 +156,11 @@ class FenceIDecode(flushDCache: Boolean)(implicit val p: Parameters) extends Dec
     FENCE_I->   List(Y,N,N,N,N,N,N,N,N,A2_X,   A1_X,   IMM_X, DW_X,  FN_X,     v,cmd,        N,N,N,N,N,N,N,CSR.N,Y,Y,N,N))
 }
 
+/**
+  * Maybe it's custom instructions class for cache flush
+  * @param supportsFlushLine
+  * @param p
+  */
 class CFlushDecode(supportsFlushLine: Boolean)(implicit val p: Parameters) extends DecodeConstants
 {
   private def zapRs1(x: BitPat) = if (supportsFlushLine) x else BitPat(x.value.U)
@@ -142,30 +172,50 @@ class CFlushDecode(supportsFlushLine: Boolean)(implicit val p: Parameters) exten
                 List(Y,N,N,N,N,N,N,Y,N,A2_ZERO,A1_RS1, IMM_X, DW_XPR,FN_ADD,   Y,M_FLUSH_ALL,N,N,N,N,N,N,N,CSR.I,N,N,N,N))
 }
 
+/**
+  * Instruction Decode Class including a table which contains Supervisor Memory-Management Instructions
+  * @param p
+  */
 class SVMDecode(implicit val p: Parameters) extends DecodeConstants
 {
   val table: Array[(BitPat, List[BitPat])] = Array(
     SFENCE_VMA->List(Y,N,N,N,N,N,Y,Y,N,A2_ZERO,A1_RS1, IMM_X, DW_XPR,FN_ADD,   Y,M_SFENCE,   N,N,N,N,N,N,N,CSR.N,N,N,N,N))
 }
 
+/**
+  * Instruction Decode Class including a table which contains a supervisor trap-return instruction
+  * @param p
+  */
 class SDecode(implicit val p: Parameters) extends DecodeConstants
 {
   val table: Array[(BitPat, List[BitPat])] = Array(
     SRET->      List(Y,N,N,N,N,N,N,X,N,A2_X,   A1_X,   IMM_X, DW_X,  FN_X,     N,M_X,        N,N,N,N,N,N,N,CSR.I,N,N,N,N))
 }
 
+/**
+  * Instruction Decode Class including a table which contains a debug trap-return instruction
+  * @param p
+  */
 class DebugDecode(implicit val p: Parameters) extends DecodeConstants
 {
   val table: Array[(BitPat, List[BitPat])] = Array(
     DRET->      List(Y,N,N,N,N,N,N,X,N,A2_X,   A1_X,   IMM_X, DW_X,  FN_X,     N,M_X,        N,N,N,N,N,N,N,CSR.I,N,N,N,N))
 }
 
+/**
+  * Maybe it's custom instructions class for cache flush
+  * @param p
+  */
 class NMIDecode(implicit val p: Parameters) extends DecodeConstants
 {
   val table: Array[(BitPat, List[BitPat])] = Array(
     MNRET->     List(Y,N,N,N,N,N,N,X,N,A2_X,   A1_X,   IMM_X, DW_X,  FN_X,     N,M_X,        N,N,N,N,N,N,N,CSR.I,N,N,N,N))
 }
 
+/**
+  * Instruction Decode Class including a table which contains shift instructions including an immediate value
+  * @param p
+  */
 class I32Decode(implicit val p: Parameters) extends DecodeConstants
 {
   val table: Array[(BitPat, List[BitPat])] = Array(
@@ -174,6 +224,10 @@ class I32Decode(implicit val p: Parameters) extends DecodeConstants
     SRAI_RV32-> List(Y,N,N,N,N,N,N,Y,N,A2_IMM, A1_RS1, IMM_I, DW_XPR,FN_SRA,   N,M_X,        N,N,N,N,N,N,Y,CSR.N,N,N,N,N))
 }
 
+/**
+  * Instruction Decode Class including a table which contains RV64I Instructions
+  * @param p
+  */
 class I64Decode(implicit val p: Parameters) extends DecodeConstants
 {
   val table: Array[(BitPat, List[BitPat])] = Array(
@@ -196,6 +250,11 @@ class I64Decode(implicit val p: Parameters) extends DecodeConstants
     SRAW->      List(Y,N,N,N,N,N,Y,Y,N,A2_RS2, A1_RS1, IMM_X, DW_32,FN_SRA,    N,M_X,        N,N,N,N,N,N,Y,CSR.N,N,N,N,N))
 }
 
+/**
+  * Instruction Decode Class including a table which contains RV32M Instructions
+  * @param pipelinedMul
+  * @param p
+  */
 class MDecode(pipelinedMul: Boolean)(implicit val p: Parameters) extends DecodeConstants
 {
   val M = if (pipelinedMul) Y else N
@@ -212,6 +271,11 @@ class MDecode(pipelinedMul: Boolean)(implicit val p: Parameters) extends DecodeC
     REMU->      List(Y,N,N,N,N,N,Y,Y,N,A2_RS2, A1_RS1, IMM_X, DW_XPR,FN_REMU,  N,M_X,        N,N,N,N,N,Y,Y,CSR.N,N,N,N,N))
 }
 
+/**
+  * Instruction Decode Class including a table which contains RV64M Instructions
+  * @param pipelinedMul
+  * @param p
+  */
 class M64Decode(pipelinedMul: Boolean)(implicit val p: Parameters) extends DecodeConstants
 {
   val M = if (pipelinedMul) Y else N
@@ -225,6 +289,10 @@ class M64Decode(pipelinedMul: Boolean)(implicit val p: Parameters) extends Decod
     REMUW->     List(Y,N,N,N,N,N,Y,Y,N,A2_RS2, A1_RS1, IMM_X, DW_32, FN_REMU,  N,M_X,        N,N,N,N,N,Y,Y,CSR.N,N,N,N,N))
 }
 
+/**
+  * Instruction Decode Class including a table which contains RV32A Instructions
+  * @param p
+  */
 class ADecode(implicit val p: Parameters) extends DecodeConstants
 {
   val table: Array[(BitPat, List[BitPat])] = Array(
@@ -242,6 +310,10 @@ class ADecode(implicit val p: Parameters) extends DecodeConstants
     SC_W->      List(Y,N,N,N,N,N,Y,Y,N,A2_ZERO,A1_RS1, IMM_X, DW_XPR,FN_ADD,   Y,M_XSC,      N,N,N,N,N,N,Y,CSR.N,N,N,Y,N))
 }
 
+/**
+  * Instruction Decode Class including a table which contains RV64A Instructions
+  * @param p
+  */
 class A64Decode(implicit val p: Parameters) extends DecodeConstants
 {
   val table: Array[(BitPat, List[BitPat])] = Array(
@@ -259,6 +331,10 @@ class A64Decode(implicit val p: Parameters) extends DecodeConstants
     SC_D->      List(Y,N,N,N,N,N,Y,Y,N,A2_ZERO,A1_RS1, IMM_X, DW_XPR,FN_ADD,   Y,M_XSC,      N,N,N,N,N,N,Y,CSR.N,N,N,Y,N))
 }
 
+/**
+  * Instruction Decode Class including a table which contains Extension F Half-Precision Instructions
+  * @param p
+  */
 class HDecode(implicit val p: Parameters) extends DecodeConstants
 {
   val table: Array[(BitPat, List[BitPat])] = Array(
@@ -292,6 +368,10 @@ class HDecode(implicit val p: Parameters) extends DecodeConstants
     FSQRT_H->   List(Y,Y,N,N,N,N,N,N,N,A2_X,   A1_X,   IMM_X, DW_X,  FN_X,     N,M_X,        Y,Y,N,Y,N,N,N,CSR.N,N,N,N,N))
 }
 
+/**
+  * Instruction Decode Class including a table which contains Extension F Single-Precision Instructions
+  * @param p
+  */
 class FDecode(implicit val p: Parameters) extends DecodeConstants
 {
   val table: Array[(BitPat, List[BitPat])] = Array(
@@ -323,6 +403,10 @@ class FDecode(implicit val p: Parameters) extends DecodeConstants
     FSQRT_S->   List(Y,Y,N,N,N,N,N,N,N,A2_X,   A1_X,   IMM_X, DW_X,  FN_X,     N,M_X,        Y,Y,N,Y,N,N,N,CSR.N,N,N,N,N))
 }
 
+/**
+  * Instruction Decode Class including a table which contains Extension F Double-Precision Instructions
+  * @param p
+  */
 class DDecode(implicit val p: Parameters) extends DecodeConstants
 {
   val table: Array[(BitPat, List[BitPat])] = Array(
@@ -354,6 +438,10 @@ class DDecode(implicit val p: Parameters) extends DecodeConstants
     FSQRT_D->   List(Y,Y,N,N,N,N,N,N,N,A2_X,   A1_X,   IMM_X, DW_X,  FN_X,     N,M_X,        Y,Y,N,Y,N,N,N,CSR.N,N,N,N,Y))
 }
 
+/**
+  * Instruction Decode Class including a table which contains Extension F Half-Precision <-> Double-Precision Instructions
+  * @param p
+  */
 class HDDecode(implicit val p: Parameters) extends DecodeConstants
 {
   val table: Array[(BitPat, List[BitPat])] = Array(
@@ -361,6 +449,10 @@ class HDDecode(implicit val p: Parameters) extends DecodeConstants
     FCVT_H_D->  List(Y,Y,N,N,N,N,N,N,N,A2_X,   A1_X,   IMM_X, DW_X,  FN_X,     N,M_X,        Y,N,N,Y,N,N,N,CSR.N,N,N,N,Y))
 }
 
+/**
+  * Instruction Decode Class including a table which contains Extension F Half-Precision <-> 64bit-Integer Instructions
+  * @param p
+  */
 class H64Decode(implicit val p: Parameters) extends DecodeConstants
 {
   val table: Array[(BitPat, List[BitPat])] = Array(
@@ -370,6 +462,10 @@ class H64Decode(implicit val p: Parameters) extends DecodeConstants
     FCVT_H_LU-> List(Y,Y,N,N,N,N,N,Y,N,A2_X,   A1_RS1, IMM_X, DW_X,  FN_X,     N,M_X,        N,N,N,Y,N,N,N,CSR.N,N,N,N,N))
 }
 
+/**
+  * Instruction Decode Class including a table which contains Extension F Single-Precision <-> 64bit-Integer Instructions
+  * @param p
+  */
 class F64Decode(implicit val p: Parameters) extends DecodeConstants
 {
   val table: Array[(BitPat, List[BitPat])] = Array(
@@ -379,6 +475,10 @@ class F64Decode(implicit val p: Parameters) extends DecodeConstants
     FCVT_S_LU-> List(Y,Y,N,N,N,N,N,Y,N,A2_X,   A1_RS1, IMM_X, DW_X,  FN_X,     N,M_X,        N,N,N,Y,N,N,N,CSR.N,N,N,N,N))
 }
 
+/**
+  * Instruction Decode Class including a table which contains Extension F Double-Precision <-> 64bit-Integer Instructions
+  * @param p
+  */
 class D64Decode(implicit val p: Parameters) extends DecodeConstants
 {
   val table: Array[(BitPat, List[BitPat])] = Array(
@@ -390,12 +490,20 @@ class D64Decode(implicit val p: Parameters) extends DecodeConstants
     FCVT_D_LU-> List(Y,Y,N,N,N,N,N,Y,N,A2_X,   A1_RS1, IMM_X, DW_X,  FN_X,     N,M_X,        N,N,N,Y,N,N,N,CSR.N,N,N,N,Y))
 }
 
+/**
+  * Instruction Decode Class including a table which contains Simple Custom Instruction Extension Instructions
+  * @param p
+  */
 class SCIEDecode(implicit val p: Parameters) extends DecodeConstants
 {
   val table: Array[(BitPat, List[BitPat])] = Array(
     SCIE.opcode->       List(Y,N,N,N,N,N,Y,Y,Y,A2_ZERO,A1_RS1, IMM_X, DW_XPR,FN_X,     N,M_X,        N,N,N,N,N,N,Y,CSR.N,N,N,N,N))
 }
 
+/**
+  * Instruction Decode Class including a table which contains Rocket Custom Coprocessor Instructions
+  * @param p
+  */
 class RoCCDecode(implicit val p: Parameters) extends DecodeConstants
 {
   val table: Array[(BitPat, List[BitPat])] = Array(
